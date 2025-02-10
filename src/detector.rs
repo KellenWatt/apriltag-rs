@@ -6,14 +6,15 @@ use std::mem::MaybeUninit;
 use nalgebra::Matrix3;
 use nalgebra::linalg::{QR};
 
+// These are here as a result of libapriltag using `static inline` on all of its useful zarray
+// functions. That's great for efficiency (kind of), but not so much for porting.
 extern "C" {
     fn zarray_size__extern(za: *mut zarray_t) -> i32;
     fn zarray_get__extern(za: *mut zarray_t, idx: i32, p: *mut ::std::os::raw::c_void);
     fn zarray_destroy__extern(za: *mut zarray_t);
-    // fn apriltag_detector_detect__extern(det: *mut apriltag_detector_t, img: *mut image_u8_t) -> *mut zarray_t;
 }
 
-// #[derive(Clone, Copy)]
+#[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub struct CameraIntrinsics {
     pub fx: f64,
@@ -285,30 +286,12 @@ impl Detector {
 
     pub fn detect<T: AsRef<[u8]>>(&mut self, image: ImageU8<T>) -> Vec<Detection> {
         unsafe {
-            // println!("detect(or) {:p}", self.raw);
             let mut img_u8 = image.as_image_u8();
             let img_ptr = (&mut img_u8) as *mut image_u8_t;
-            // println!("image {:p}", img_u8);
-            // let bytes = (*img_u8).buf;
-            // for i in 0..(*img_u8).width {
-            //     let b = bytes.add(i as usize).read();
-            //     print!("{} ", b);
-            // }
-            // println!();
             let arr = apriltag_detector_detect(self.raw, img_ptr);
-            // println!("size: {}", (*arr).size);
-            let size = zarray_size__extern(arr);
-          
-            // notes for future self
-            // At this point, after detection, we know that the raw data
-            // still looks the way we want it. which implies that it looks
-            // that way before. 
-            // This means it's something in the call to detect itself
 
+            let size = zarray_size__extern(arr);
             let mut out = Vec::with_capacity(size as usize);
-            // let list = Array::from_raw(arr);
-            // let len = list.len();
-            // let mut out = Vec::with_capacity(len);
 
             for i in 0..size {
                 let mut det = MaybeUninit::<*mut apriltag_detection_t>::uninit();

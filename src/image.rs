@@ -25,22 +25,22 @@ impl<T: AsRef<[u8]>> ImageU8<T> {
             height,
             data,
         }
-        // unsafe {
-        //     let bytes = data.as_ref();
-        //     if bytes.len() != (width * height) as usize {
-        //         return None;
-        //     }
-        //     let raw = image_u8_create(width, height);
-        //     if raw.is_null() {
-        //         return None;
-        //     }
-        //     let data_ptr = bytes.as_ptr();
-        //     std::ptr::copy_nonoverlapping(data_ptr, (*raw).buf, (height * width) as usize);
-        // 
-        //     Some(ImageU8 {
-        //         raw
-        //     })
-        // }
+    }
+    
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn stride(&self) -> u32 {
+        self.width
+    }
+
+    pub fn data(&self) -> &T {
+        &self.data
     }
 
     pub unsafe fn as_image_u8(&self) -> image_u8_t {
@@ -51,10 +51,6 @@ impl<T: AsRef<[u8]>> ImageU8<T> {
             buf: self.data.as_ref().as_ptr() as *mut u8,
         }
     }
-
-    // pub unsafe fn to_raw(&self) -> *mut image_u8_t {
-    //     self.raw
-    // }
 }
 
 // impl Clone for ImageU8 {
