@@ -1,10 +1,17 @@
 use crate::native::*;
 use crate::family::TagFamily;
-use crate::array::Array;
+// use crate::array::Array;
 use crate::image::ImageU8;
 use std::mem::MaybeUninit;
 use nalgebra::Matrix3;
 use nalgebra::linalg::{QR};
+
+extern "C" {
+    fn zarray_size__extern(za: *mut zarray_t) -> i32;
+    fn zarray_get__extern(za: *mut zarray_t, idx: i32, p: *mut ::std::os::raw::c_void);
+    fn zarray_destroy__extern(za: *mut zarray_t);
+    // fn apriltag_detector_detect__extern(det: *mut apriltag_detector_t, img: *mut image_u8_t) -> *mut zarray_t;
+}
 
 // #[derive(Clone, Copy)]
 #[allow(dead_code)]
@@ -16,6 +23,7 @@ pub struct CameraIntrinsics {
 }
 
 #[allow(dead_code)]
+#[derive(Clone, Copy)]
 pub struct Rotation {
     quat: [f64; 4],
 }
@@ -137,6 +145,7 @@ impl Rotation {
 }
 
 #[allow(dead_code)]
+#[derive(Clone, Copy)]
 pub struct Translation {
     pub x: f64,
     pub y: f64, 
@@ -234,6 +243,8 @@ pub struct Detector {
     raw: *mut apriltag_detector_t,
 }
 
+unsafe impl Send for Detector {}
+
 impl Drop for Detector {
     fn drop(&mut self) {
         unsafe {
@@ -245,14 +256,20 @@ impl Drop for Detector {
 #[allow(dead_code)]
 impl Detector {
     pub fn new() -> Detector {
-        Detector {
-            raw: unsafe{apriltag_detector_create()},
+        unsafe {
+            let ptr = apriltag_detector_create();
+            println!("detector: {:p}", ptr);
+            Detector {
+                raw: ptr,
+            }
         }
     }
 
     pub fn add_with_bits(&mut self, fam: TagFamily, bits: u8) {
         unsafe {
-            apriltag_detector_add_family_bits(self.raw, fam.family().into_raw(), bits as i32);
+            let fam = fam.family().into_raw();
+            // println!("family: {:p}", fam);
+            apriltag_detector_add_family_bits(self.raw, fam, bits as i32);
         }
     }
 
@@ -266,17 +283,44 @@ impl Detector {
         }
     }
 
-    pub fn detect(&mut self, image: &ImageU8) -> Vec<Detection> {
+    pub fn detect<T: AsRef<[u8]>>(&mut self, image: ImageU8<T>) -> Vec<Detection> {
         unsafe {
-            let arr = apriltag_detector_detect(self.raw, image.to_raw());
-            let list = Array::from_raw(arr);
-            let len = list.len();
-            let mut out = Vec::with_capacity(len);
+            // println!("detect(or) {:p}", self.raw);
+            let mut img_u8 = image.as_image_u8();
+            let img_ptr = (&mut img_u8) as *mut image_u8_t;
+            // println!("image {:p}", img_u8);
+            // let bytes = (*img_u8).buf;
+            // for i in 0..(*img_u8).width {
+            //     let b = bytes.add(i as usize).read();
+            //     print!("{} ", b);
+            // }
+            // println!();
+            let arr = apriltag_detector_detect(self.raw, img_ptr);
+            // println!("size: {}", (*arr).size);
+            let size = zarray_size__extern(arr);
+          
+            // notes for future self
+            // At this point, after detection, we know that the raw data
+            // still looks the way we want it. which implies that it looks
+            // that way before. 
+            // This means it's something in the call to detect itself
 
-            for i in 0..len {
-                out.push(list.get_value_unchecked(i));
+            let mut out = Vec::with_capacity(size as usize);
+            // let list = Array::from_raw(arr);
+            // let len = list.len();
+            // let mut out = Vec::with_capacity(len);
+
+            for i in 0..size {
+                let mut det = MaybeUninit::<*mut apriltag_detection_t>::uninit();
+                zarray_get__extern(arr, i, det.as_mut_ptr() as *mut ::std::os::raw::c_void);
+                // let detection_p: *mut apriltag_detection_t = 
+                //     (*arr).data.add(n * std::mem::size_of::<*mut apriltag_detection_t>()) as *mut apriltag_detection_t;
+                let detection = Detection::from_raw(det.assume_init());
+                out.push(detection);
             }
+            zarray_destroy__extern(arr);
             out
         }
     }
 }
+

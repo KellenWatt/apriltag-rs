@@ -7,6 +7,13 @@ fn main() {
 
     // Tell cargo to tell rustc to link the system apriltag
     // shared library.
+
+    println!("cargo:rerun-if-changed=src/c/zarray.c");
+    println!("cargo:rerun-if-changed=src/c/apriltag.h");
+    cc::Build::new()
+        .file("src/c/zarray.c")
+        .compile("zarray");
+
     println!("cargo:rustc-link-lib=apriltag");
 
     // The bindgen::Builder is the main entry point

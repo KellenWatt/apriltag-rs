@@ -6,6 +6,7 @@ edition = "2021"
 
 [build-dependencies]
 bindgen = "0.71.1"
+cc = "1.2.13"
 
 [dependencies]
 nalgebra = "0.33.2"
