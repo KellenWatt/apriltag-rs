@@ -7,5 +7,8 @@ pub mod detector;
 
 pub use image::{ImageU8, Image};
 pub use family::TagFamily;
-pub use detector::{Detector, CameraIntrinsics};
+pub use detector::{Detector};
+
+#[cfg(feature = "3d")]
+pub use detector::{CameraIntrinsics};
 

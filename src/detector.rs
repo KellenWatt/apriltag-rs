@@ -3,7 +3,9 @@ use crate::family::TagFamily;
 // use crate::array::Array;
 use crate::image::ImageU8;
 use std::mem::MaybeUninit;
+#[cfg(feature = "3d")]
 use nalgebra::Matrix3;
+#[cfg(feature = "3d")]
 use nalgebra::linalg::{QR};
 
 // These are here as a result of libapriltag using `static inline` on all of its useful zarray
@@ -14,6 +16,8 @@ extern "C" {
     fn zarray_destroy__extern(za: *mut zarray_t);
 }
 
+
+#[cfg(feature = "3d")]
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub struct CameraIntrinsics {
@@ -23,12 +27,14 @@ pub struct CameraIntrinsics {
     pub cy: f64,
 }
 
+#[cfg(feature = "3d")]
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub struct Rotation {
     quat: [f64; 4],
 }
 
+#[cfg(feature = "3d")]
 #[allow(dead_code)]
 impl Rotation {
     unsafe fn from_matd(mat: *mut matd_t) -> Rotation {
@@ -68,9 +74,9 @@ impl Rotation {
         if trace > 0.0 {
             let s = 0.5 / (trace + 1.0).sqrt();
             let w = 0.25 / s;
-            let x = m[(2,1)] - m[(1,2)] * s;
-            let y = m[(0,2)] - m[(2,0)] * s;
-            let z = m[(1,0)] - m[(0,1)] * s;
+            let x = (m[(2,1)] - m[(1,2)]) * s;
+            let y = (m[(0,2)] - m[(2,0)]) * s;
+            let z = (m[(1,0)] - m[(0,1)]) * s;
             Rotation{quat: [w,x,y,z]}
         } else {
             if m00 > m11 && m00 > m22 {
@@ -98,7 +104,7 @@ impl Rotation {
         }
     }
 
-    pub fn x(&self) -> f64 {
+    pub fn roll(&self) -> f64 {
         let w = self.quat[0];
         let x = self.quat[1];
         let y = self.quat[2];
@@ -113,8 +119,12 @@ impl Rotation {
             0.0
         }
     }
+
+    pub fn roll_deg(&self) -> f64 {
+        self.roll() / std::f64::consts::PI * 180.0
+    }
     
-    pub fn y(&self) -> f64 {
+    pub fn pitch(&self) -> f64 {
         let w = self.quat[0];
         let x = self.quat[1];
         let y = self.quat[2];
@@ -127,8 +137,11 @@ impl Rotation {
             ratio.asin()
         }
     }
+    pub fn pitch_deg(&self) -> f64 {
+        self.pitch() / std::f64::consts::PI * 180.0
+    }
 
-    pub fn z(&self) -> f64 {
+    pub fn yaw(&self) -> f64 {
         let w = self.quat[0];
         let x = self.quat[1];
         let y = self.quat[2];
@@ -143,8 +156,12 @@ impl Rotation {
             (2.0*w*z).atan2(w*w - z*z)
         }
     }
+    pub fn yaw_deg(&self) -> f64 {
+        self.yaw() / std::f64::consts::PI * 180.0
+    }
 }
 
+#[cfg(feature = "3d")]
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub struct Translation {
@@ -153,6 +170,7 @@ pub struct Translation {
     pub z: f64,
 }
 
+#[cfg(feature = "3d")]
 #[allow(dead_code)]
 impl Translation {
     unsafe fn from_matd(mat: *mut matd_t) -> Translation {
@@ -164,10 +182,11 @@ impl Translation {
     }
 }
 
+#[cfg(feature = "3d")]
 #[allow(dead_code)]
 pub struct Pose {
-    rot: Rotation,
-    pos: Translation,
+    pub rot: Rotation,
+    pub pos: Translation,
 }
 
 pub type Point = [f64; 2];
@@ -213,6 +232,7 @@ impl Detection {
         unsafe {(*self.raw).p}
     }
 
+    #[cfg(feature = "3d")]
     pub fn estimate_pose(&self, intrinsics: &CameraIntrinsics, tag_size: f64) -> Pose {
         unsafe {
             let mut info = apriltag_detection_info_t {
@@ -238,6 +258,29 @@ impl Detection {
     }
 }
 
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+pub struct DetectorConfig {
+    pub threads: u32,
+    pub quad_decimate: f32,
+    pub quad_sigma: f32,
+    pub refine_edges: bool,
+    pub decode_sharpening: f64,
+    pub debug: bool,
+}
+
+impl Default for DetectorConfig {
+    fn default() -> DetectorConfig {
+        DetectorConfig {
+            threads: 1,
+            quad_decimate: 2.0,
+            quad_sigma: 0.0,
+            refine_edges: false,
+            decode_sharpening: 0.25,
+            debug: false,
+        }
+    }
+}
 
 #[allow(dead_code)]
 pub struct Detector {
@@ -259,7 +302,32 @@ impl Detector {
     pub fn new() -> Detector {
         unsafe {
             let ptr = apriltag_detector_create();
-            println!("detector: {:p}", ptr);
+            Detector {
+                raw: ptr,
+            }
+        }
+    }
+
+    pub fn new_with_threads(n: i32) -> Detector {
+        unsafe {
+            let ptr = apriltag_detector_create();
+            (*ptr).nthreads = n;
+            Detector {
+                raw: ptr,
+            }
+        }
+
+    }
+
+    pub fn from_config(cfg: DetectorConfig) -> Detector {
+        unsafe {
+            let ptr = apriltag_detector_create();
+            (*ptr).nthreads = cfg.threads as i32;
+            (*ptr).quad_decimate = cfg.quad_decimate;
+            (*ptr).quad_sigma = cfg.quad_sigma;
+            (*ptr).refine_edges = cfg.refine_edges;
+            (*ptr).decode_sharpening = cfg.decode_sharpening;
+            (*ptr).debug = cfg.debug;
             Detector {
                 raw: ptr,
             }

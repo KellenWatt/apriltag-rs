@@ -3,11 +3,13 @@ name = "apriltag-rs"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+3d = ["dep:nalgebra"]
 
 [build-dependencies]
 bindgen = "0.71.1"
 cc = "1.2.13"
 
 [dependencies]
-nalgebra = "0.33.2"
+nalgebra = { version = "0.33.2", optional = true }
 paste = "1.0.15"
